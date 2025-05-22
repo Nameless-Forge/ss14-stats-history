@@ -4,6 +4,7 @@ import os
 from datetime import datetime
 
 DATA_PATH = "data/history.csv"
+ARCHIVE_PATTERN = "data/history_{year}_{month:02d}.csv"
 API_URL = "https://hub.spacestation14.com/api/servers"
 
 STATUS_FIELDS = [
@@ -42,13 +43,36 @@ def ensure_data_folder():
 
 def get_field_value(sd, key):
     v = sd.get(key, '')
-    # Если список, склеиваем через запятую
     if isinstance(v, list):
         return ','.join(map(str, v))
-    # Для bool возвращаем как 0/1
     if isinstance(v, bool):
         return int(v)
     return v
+
+def rotate_if_new_month():
+    if not os.path.isfile(DATA_PATH):
+        return
+    with open(DATA_PATH, "r", encoding="utf-8") as f:
+        header = f.readline()
+        first_line = f.readline()
+        if not first_line:
+            return
+        first_row = first_line.split(",")
+        try:
+            first_year = int(first_row[1])
+            first_month = int(first_row[2])
+        except Exception:
+            return
+
+    now = datetime.utcnow()
+    current_year = now.year
+    current_month = now.month
+
+    if first_year != current_year or first_month != current_month:
+        archive_path = ARCHIVE_PATTERN.format(year=first_year, month=first_month)
+        if not os.path.exists(archive_path):
+            os.rename(DATA_PATH, archive_path)
+            print(f"Rotated {DATA_PATH} → {archive_path}")
 
 def append_data(servers):
     dt_now = datetime.utcnow()
@@ -96,5 +120,6 @@ def append_data(servers):
 
 if __name__ == "__main__":
     ensure_data_folder()
+    rotate_if_new_month()
     data = fetch_data()
     append_data(data)
